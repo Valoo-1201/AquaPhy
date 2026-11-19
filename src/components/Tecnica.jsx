@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   ResponsiveContainer, LineChart, ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceArea, ReferenceLine,
 } from 'recharts'
-import { MapContainer, TileLayer, CircleMarker, GeoJSON, Tooltip as MapTip } from 'react-leaflet'
+import { MapContainer, TileLayer, CircleMarker, GeoJSON, LayersControl, Tooltip as MapTip } from 'react-leaflet'
 import ZM_PUEBLA from '../data/puebla-zm.json'
 import 'leaflet/dist/leaflet.css'
 import { fraccionHOCl, pKa, colorPH, GRADIENTE_INDICADOR } from '../lib/chem.js'
@@ -10,6 +10,8 @@ import { UMBRAL_MIN, UMBRAL_MAX, NOM_MIN, NOM_MAX, PIN_OPERADOR, COLONIAS, adcDe
 import { describirClima } from '../hooks/useClima.js'
 import { desbloquearAudio, sonidoInicio, sonidoFin } from '../lib/sound.js'
 import * as I from './Iconos.jsx'
+import AnalisisTemp from './AnalisisTemp.jsx'
+import Fuentes from './Fuentes.jsx'
 
 function useAncho(ref) {
   const [w, setW] = useState(600)
@@ -209,7 +211,7 @@ function Consola({ a }) {
               <I.Alto /> Paro de emergencia
             </button>
             <button className={`paro-tapa ${tapa ? 'arriba' : ''}`} onClick={() => setTapa((x) => !x)} aria-expanded={tapa}>
-              {tapa ? 'Bajar cubierta' : 'Levantar cubierta de seguridad'}
+              <I.Candado /> {tapa ? 'Cubrir' : 'Paro de emergencia · toca para descubrir'}
             </button>
           </>
         )}
@@ -242,7 +244,7 @@ function Hardware({ t }) {
         </div>
         <dl className="hw-datos">
           <div>
-            <dt>Batería · panel solar</dt>
+            <dt>Batería · panel solar <span className="chip chip-sim">Simulado</span></dt>
             <dd><strong className="dato">{bat} %</strong> <span className="dato-sec">{t.voltaje.toFixed(2)} V</span></dd>
             <div className="barra"><i style={{ width: `${bat}%` }} /></div>
           </div>
@@ -291,7 +293,7 @@ function Grafica24h({ historia, modo }) {
           </LineChart>
         </ResponsiveContainer>
       </div>
-      <p className="nota">Tras cada corte el agua llega más alcalina y el cloro pierde fuerza. {modo === 'demo' ? 'Historial de demostración.' : 'Historial de referencia; la serie en vivo viene de Blynk.'}</p>
+      <p className="nota"><span className="chip chip-sim">Simulado</span> Escenario de demostración con dos cortes de tandeo: ilustra la hipótesis de que el pH cambia al restablecerse el servicio, la cual el nodo real permite comprobar. {modo === 'demo' ? '' : 'El ciclo en vivo sí viene de Blynk.'}</p>
     </article>
   )
 }
@@ -514,7 +516,7 @@ function Clima({ clima }) {
     <article className="panel clima" aria-labelledby="h-clima">
       <header className="panel-cab">
         <h2 id="h-clima">Clima y suelo en Puebla</h2>
-        <span className="dato-sec">{clima.real ? 'Open-Meteo, en vivo' : 'Valores de referencia sin conexión'}</span>
+        <span className="dato-sec">{clima.real ? 'Open-Meteo, en vivo' : 'Sin conexión: valores de ejemplo, no reales'}</span>
       </header>
       <div className="clima-top">
         <strong className="dato grande">{Math.round(clima.temp)}°</strong>
@@ -532,7 +534,7 @@ function Clima({ clima }) {
           </li>
         ))}
       </ul>
-      <p className="nota">El agua enterrada a 54 cm queda cerca de {clima.suelo.s54.toFixed(0)} °C. Más calor acelera la pérdida de cloro en tinacos y cisternas.</p>
+      <p className="nota">El agua enterrada a 54 cm queda cerca de {clima.suelo.s54.toFixed(0)} °C. Más calor acelera el consumo de cloro en el agua (García-Ávila et al., 2020).</p>
     </article>
   )
 }
@@ -543,48 +545,143 @@ const estiloMunicipio = (f) => f.properties.capital
   ? { color: '#1d3e9e', weight: 2.5, fillColor: '#2453d4', fillOpacity: 0.1 }
   : { color: '#6b7a99', weight: 1, dashArray: '4 4', fillColor: '#6b7a99', fillOpacity: 0.04 }
 
-function Mapa({ t }) {
-  const nodos = COLONIAS.map((c, i) => {
-    const ph = c.real ? t.ph : [7.32, 7.81, 7.05, 8.62, 7.44][i - 1] ?? 7.3
-    const color = ph < NOM_MIN || ph > NOM_MAX ? '#d7263d' : ph > 7.6 ? '#f2b705' : '#12a36f'
-    return { ...c, ph, color }
+// Color del nodo: rojo = fuera de NOM-127; amarillo = dentro de norma pero menos
+// de la mitad del cloro como HOCl (pH > pKa); verde = norma y cloro mayormente activo.
+// ——— Geometría (calculada a partir del contorno del INEGI) ———
+const anillos = (g) => (g.type === 'Polygon' ? [g.coordinates] : g.coordinates)
+function dentro([lng, lat], g) {
+  return anillos(g).some((poli) => {
+    let adentro = false
+    const r = poli[0]
+    for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+      const [xi, yi] = r[i], [xj, yj] = r[j]
+      if ((yi > lat) !== (yj > lat) && lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) adentro = !adentro
+    }
+    return adentro
+  })
+}
+// Área aproximada (km²): proyección equirectangular local + fórmula del área de Gauss.
+function areaKm2(g) {
+  let total = 0
+  for (const poli of anillos(g)) {
+    poli.forEach((r, k) => {
+      const lat0 = (r.reduce((acc, p) => acc + p[1], 0) / r.length) * (Math.PI / 180)
+      let a = 0
+      for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+        const xi = r[i][0] * 111.32 * Math.cos(lat0), yi = r[i][1] * 110.57
+        const xj = r[j][0] * 111.32 * Math.cos(lat0), yj = r[j][1] * 110.57
+        a += xj * yi - xi * yj
+      }
+      total += (k === 0 ? 1 : -1) * Math.abs(a / 2)
+    })
+  }
+  return total
+}
+
+const estiloResaltado = { weight: 3.5, color: '#f2b705', dashArray: null, fillOpacity: 0.22 }
+const estiloSeleccionado = { weight: 4, color: '#f2b705', dashArray: null, fillColor: '#f2b705', fillOpacity: 0.18 }
+
+function Mapa({ t, temp }) {
+  const [sel, setSel] = useState(null)
+  const selRef = useRef(null)
+  const capas = useRef({})
+  const elegir = (f, capa) => {
+    const previo = selRef.current
+    if (previo && capas.current[previo]) capas.current[previo].setStyle(estiloMunicipio(capas.current[previo].feature))
+    selRef.current = f.properties.cve
+    capa.setStyle(estiloSeleccionado)
+    capa.bringToFront()
+    setSel(f)
+    if (capa._map) capa._map.fitBounds(capa.getBounds(), { padding: [20, 20] })
+  }
+  const interaccionMunicipio = (f, capa) => {
+    capas.current[f.properties.cve] = capa
+    capa.bindTooltip(f.properties.capital ? 'Municipio de Puebla' : f.properties.nombre, { sticky: true })
+    capa.on({
+      mouseover: () => { if (selRef.current !== f.properties.cve) { capa.setStyle(estiloResaltado); capa.bringToFront() } },
+      mouseout: () => { if (selRef.current !== f.properties.cve) capa.setStyle(estiloMunicipio(f)) },
+      click: () => elegir(f, capa),
+    })
+  }
+  const nodos = COLONIAS.map((c) => {
+    const ph = c.real ? t.ph : c.phSim
+    const f = fraccionHOCl(ph, temp)
+    const color = ph < NOM_MIN || ph > NOM_MAX ? '#d7263d' : f < 0.5 ? '#f2b705' : '#12a36f'
+    return { ...c, ph, f, color }
   })
   return (
     <article className="panel mapa" aria-labelledby="h-mapa">
       <header className="panel-cab">
         <h2 id="h-mapa">Mapa de nodos en Puebla</h2>
-        <span className="leyenda"><i className="l-ok" />Seguro <i className="l-aviso" />pH alto <i className="l-mal" />Fuera de norma</span>
+        <span className="leyenda"><i className="l-ok" />Seguro <i className="l-aviso" />Cloro activo &lt; 50 % <i className="l-mal" />Fuera de norma</span>
       </header>
       <div className="mapa-cont">
-        <MapContainer bounds={LIMITES_PUEBLA} scrollWheelZoom={false} className="mapa-leaflet" attributionControl>
-          <TileLayer
-            url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a> · Límites: INEGI'
-          />
-          <GeoJSON data={ZM_PUEBLA} style={estiloMunicipio}
-            onEachFeature={(f, capa) => capa.bindTooltip(f.properties.capital ? 'Municipio de Puebla' : f.properties.nombre, { sticky: true })} />
+        <MapContainer bounds={LIMITES_PUEBLA} scrollWheelZoom className="mapa-leaflet" attributionControl>
+          <LayersControl position="topright">
+            <LayersControl.BaseLayer checked name="Mapa">
+              <TileLayer
+                className="tiles-calles"
+                url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+                maxZoom={19}
+                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · Límites: INEGI'
+              />
+            </LayersControl.BaseLayer>
+            <LayersControl.BaseLayer name="Satélite">
+              <TileLayer
+                url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                maxZoom={19}
+                attribution='Imágenes &copy; Esri, Maxar, Earthstar Geographics · Límites: INEGI'
+              />
+            </LayersControl.BaseLayer>
+          </LayersControl>
+          <GeoJSON data={ZM_PUEBLA} style={estiloMunicipio} onEachFeature={interaccionMunicipio} />
           {nodos.map((n) => (
             <CircleMarker key={n.id} center={[n.lat, n.lng]} radius={n.real ? 12 : 8}
               pathOptions={{ color: 'white', weight: 3, fillColor: n.color, fillOpacity: 1 }}>
-              <MapTip direction="top" offset={[0, -8]} permanent={n.real}>{n.real ? `ESP32 · pH ${n.ph.toFixed(2)}` : `${n.nombre} · pH ${n.ph.toFixed(2)}`}</MapTip>
+              <MapTip direction="top" offset={[0, -8]} permanent={n.real}>{n.real ? `ESP32 · pH ${n.ph.toFixed(2)}` : `${n.nombre} · pH ${n.ph.toFixed(2)} · ${Math.round(n.f * 100)} % HOCl · simulado`}</MapTip>
             </CircleMarker>
           ))}
         </MapContainer>
         <ul className="mapa-lista">
           {nodos.map((n) => (
-            <li key={n.id}><i style={{ background: n.color }} /><span>{n.nombre}{n.real && <em> · nodo real</em>}</span><strong>{n.ph.toFixed(2)}</strong></li>
+            <li key={n.id}><i style={{ background: n.color }} /><span>{n.nombre}{n.real ? <em> · nodo real</em> : <small className="sim"> · {n.escenario}</small>}</span><strong>{n.ph.toFixed(2)}</strong></li>
           ))}
         </ul>
       </div>
-      <p className="nota">Contorno azul: municipio de Puebla. Punteados: municipios vecinos de la zona metropolitana. El nodo del Centro Histórico es la ESP32 real; los otros cinco son simulados.</p>
+      {sel ? <InfoMunicipio f={sel} nodos={nodos} onCerrar={() => {
+        const c = capas.current[selRef.current]
+        if (c) c.setStyle(estiloMunicipio(c.feature))
+        selRef.current = null
+        setSel(null)
+      }} /> : <p className="nota"><strong>Toca un municipio</strong> para ver sus datos y acercar el mapa. Puedes acercar con dos dedos en el trackpad.</p>}
+      <p className="nota">Contorno azul: municipio de Puebla. Punteados: municipios vecinos de la zona metropolitana. El nodo del Centro Histórico es la ESP32 real; los otros cinco son <span className="chip chip-sim">simulados</span> (escenarios). Amarillo = dentro de NOM-127 pero con menos de la mitad del cloro como HOCl.</p>
     </article>
+  )
+}
+
+function InfoMunicipio({ f, nodos, onCerrar }) {
+  const suyos = nodos.filter((n) => dentro([n.lng, n.lat], f.geometry))
+  const reales = suyos.filter((n) => n.real)
+  const prom = suyos.length ? suyos.reduce((acc, n) => acc + n.ph, 0) / suyos.length : null
+  return (
+    <div className="info-mun" role="region" aria-label={`Datos de ${f.properties.nombre}`}>
+      <div className="info-mun-cab">
+        <strong>{f.properties.nombre}</strong>
+        <span className="dato-sec">Clave INEGI {f.properties.cve}</span>
+        <button className="info-mun-x" onClick={onCerrar} aria-label="Cerrar">✕</button>
+      </div>
+      <dl>
+        <div><dt>Superficie aprox.</dt><dd>{Math.round(areaKm2(f.geometry))} km²</dd><small>Calculada del contorno INEGI</small></div>
+        <div><dt>Nodos en el municipio</dt><dd>{suyos.length}</dd><small>{reales.length} real · {suyos.length - reales.length} simulados</small></div>
+        <div><dt>pH promedio de sus nodos</dt><dd>{prom == null ? '—' : prom.toFixed(2)}</dd><small>{prom == null ? 'Aún sin nodos: candidato para instalar uno' : reales.length ? 'Incluye la lectura real del ESP32' : 'Solo nodos simulados'}</small></div>
+      </dl>
+    </div>
   )
 }
 
 // ——— INEGI ———
 export const INEGI = {
   viviendas: 1713381, tinaco: 72.8, cisterna: 42.4, alguno: 81.3,
-  cuautlancingo: { tinaco: 70.9, cisterna: 49.7 },
 }
 
 function Inegi() {
@@ -603,7 +700,6 @@ function Inegi() {
           <li key={n}><span>{n}</span><div className="barra inegi-b"><i style={{ width: `${v}%` }} /></div><strong>{v.toFixed(1)} %</strong></li>
         ))}
       </ul>
-      <p className="nota">Cuautlancingo, en la zona metropolitana: tinaco {INEGI.cuautlancingo.tinaco} %, cisterna {INEGI.cuautlancingo.cisterna} %.</p>
       <p className="fuente">Fuente: INEGI, Censo de Población y Vivienda 2020. Estado de Puebla, 1 713 381 viviendas particulares habitadas. Total de viviendas que guardan agua: estimación.</p>
     </article>
   )
@@ -648,10 +744,12 @@ export default function Tecnica({ a, clima }) {
         <Hardware t={a.t} />
         <Reto a={a} />
         <Grafica24h historia={a.historia} modo={a.modo} />
-        <Mapa t={a.t} />
+        <AnalisisTemp ph={a.t.ph} umbral={a.t.umbral} clima={clima} />
+        <Mapa t={a.t} temp={clima.suelo.s54} />
         <Clima clima={clima} />
         <Inegi />
         <Bitacora eventos={a.eventos} />
+        <Fuentes />
       </div>
     </>
   )

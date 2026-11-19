@@ -51,15 +51,16 @@ export function guardarConfigBlynk(cfg) {
   } catch { /* sin almacenamiento */ }
 }
 
-// Colonias del municipio de Puebla. Los horarios de tandeo son SIMULADOS
-// para la demostración; sustitúyelos por los del organismo operador.
+// Colonias del municipio de Puebla (coordenadas aproximadas del centro de cada colonia).
+// SIMULADO: los horarios de tandeo y el pH de los nodos distintos al Centro Histórico
+// son escenarios de demostración; Agua de Puebla no publica un calendario abierto.
 export const COLONIAS = [
   { id: 'centro', nombre: 'Centro Histórico', lat: 19.0436, lng: -98.1981, real: true, dias: [1, 3, 5], hora: 6, horas: 8 },
-  { id: 'sanmanuel', nombre: 'San Manuel', lat: 19.0225, lng: -98.1935, dias: [2, 4, 6], hora: 5, horas: 6 },
-  { id: 'lapaz', nombre: 'La Paz', lat: 19.0545, lng: -98.2265, dias: [1, 4], hora: 7, horas: 6 },
-  { id: 'castillotla', nombre: 'Lomas de Castillotla', lat: 18.9935, lng: -98.2105, dias: [0, 3], hora: 4, horas: 5 },
-  { id: 'amalucan', nombre: 'Amalucan', lat: 19.0655, lng: -98.1525, dias: [2, 5], hora: 6, horas: 5 },
-  { id: 'campeche', nombre: 'San Baltazar Campeche', lat: 19.0185, lng: -98.2095, dias: [0, 2, 4], hora: 5, horas: 7 },
+  { id: 'sanmanuel', nombre: 'San Manuel', lat: 19.0225, lng: -98.1935, dias: [2, 4, 6], hora: 5, horas: 6, phSim: 7.32, escenario: 'estable' },
+  { id: 'lapaz', nombre: 'La Paz', lat: 19.0545, lng: -98.2265, dias: [1, 4], hora: 7, horas: 6, phSim: 7.81, escenario: 'tras corte' },
+  { id: 'castillotla', nombre: 'Lomas de Castillotla', lat: 18.9935, lng: -98.2105, dias: [0, 3], hora: 4, horas: 5, phSim: 7.05, escenario: 'corregido' },
+  { id: 'amalucan', nombre: 'Amalucan', lat: 19.0655, lng: -98.1525, dias: [2, 5], hora: 6, horas: 5, phSim: 8.62, escenario: 'fuera de norma' },
+  { id: 'campeche', nombre: 'San Baltazar Campeche', lat: 19.0185, lng: -98.2095, dias: [0, 2, 4], hora: 5, horas: 7, phSim: 7.44, escenario: 'estable' },
 ]
 
 // Conversión oficial del reto (ADC 10 bits, Vref 3.3 V, pendiente negativa):

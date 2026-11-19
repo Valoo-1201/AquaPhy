@@ -64,6 +64,7 @@ function Tandeo({ a, colonia, setColonia }) {
           </select>
         </label>
       </header>
+      <p className="nota"><span className="chip chip-sim">Horario de ejemplo</span> Agua de Puebla no publica un calendario abierto de tandeo; estos horarios son simulados.</p>
       {p?.ahora ? (
         <div className="tandeo-ahora">
           <I.Gota width={40} height={40} />
