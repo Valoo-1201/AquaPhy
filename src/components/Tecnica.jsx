@@ -12,6 +12,8 @@ import { desbloquearAudio, sonidoInicio, sonidoFin } from '../lib/sound.js'
 import * as I from './Iconos.jsx'
 import AnalisisTemp from './AnalisisTemp.jsx'
 import Fuentes from './Fuentes.jsx'
+import Problema from './Problema.jsx'
+import ContactoCT from './ContactoCT.jsx'
 
 function useAncho(ref) {
   const [w, setW] = useState(600)
@@ -737,6 +739,7 @@ export default function Tecnica({ a, clima }) {
       <Heroe t={a.t} clima={clima} />
       <div className="rejilla">
         <Resumen a={a} clima={clima} />
+        <Problema temp={clima.suelo.s54} />
         <Consola a={a} />
         <CicloVivo a={a} />
         <Sonda a={a} />
@@ -745,6 +748,7 @@ export default function Tecnica({ a, clima }) {
         <Reto a={a} />
         <Grafica24h historia={a.historia} modo={a.modo} />
         <AnalisisTemp ph={a.t.ph} umbral={a.t.umbral} clima={clima} />
+        <ContactoCT a={a} temp={clima.suelo.s54} />
         <Mapa t={a.t} temp={clima.suelo.s54} />
         <Clima clima={clima} />
         <Inegi />

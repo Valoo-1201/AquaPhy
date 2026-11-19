@@ -126,9 +126,55 @@ export const FUENTES = [
 ]
 
 // Qué parte del sistema es simulada y con qué regla se genera.
+FUENTES.push(
+  {
+    id: 'oms-contacto',
+    tema: 'Cloración',
+    dato: 'OMS: para una desinfección eficaz debe haber ≥ 0.5 mg/L de cloro libre residual tras al menos 30 min de tiempo de contacto a pH < 8.0',
+    valor: '≥ 0.5 mg/L · 30 min',
+    fuente: 'OMS, Guías para la calidad del agua potable (citado por WEDC, Loughborough University)',
+    url: 'https://lboro.ac.uk/research/wedc/well/water-supply/ws-factsheets/chlorination',
+  },
+  {
+    id: 'msf-60',
+    tema: 'Cloración',
+    dato: 'Tiempo de reacción del cloro: 30 min si el pH es < 8 y 60 min si el pH es > 8',
+    valor: '30 / 60 min',
+    fuente: 'Médicos Sin Fronteras, guía de cólera, Apéndice 16 (cloración por lotes)',
+    url: 'https://medicalguidelines.msf.org/viewport/CHOL/english/appendix-16-batch-chlorination-32409872.html',
+  },
+  {
+    id: 'ssa-dosis',
+    tema: 'Cloración',
+    dato: 'Hipoclorito de sodio: 2 gotas por litro (tinaco de 1 000 L: 100 mL; agua de dudosa calidad: 150 mL). Hipoclorito de calcio: 1 pastilla de 7 g por cada 3 000 L. Espera: 30 min',
+    valor: '100 mL / 1 000 L',
+    fuente: 'Secretaría de Salud de Veracruz, Protección contra Riesgos Sanitarios: "Desinfección del agua"',
+    url: 'https://www.ssaver.gob.mx/proteccioncontrariesgossanitarios/wp-content/uploads/sites/10/2022/11/Desinfeccion-del-agua.pdf',
+  },
+  {
+    id: 'cdmx-pastilla',
+    tema: 'Cloración',
+    dato: 'Agregar en la cisterna o tinaco una pastilla de hipoclorito de calcio en trocitos por cada 3 mil litros, o 100 mL de cloro comercial por cada mil litros',
+    valor: '1 pastilla / 3 000 L',
+    fuente: 'Secretaría de Salud de la Ciudad de México',
+    url: 'https://salud.cdmx.gob.mx/storage/app/uploads/public/66d/8a7/e7e/66d8a7e7e1d55800819795.pdf',
+  },
+  {
+    id: 'kb-015',
+    tema: 'Cloración',
+    dato: 'Constante promedio de decaimiento del cloro en el agua medida: 0.15 h⁻¹ (se usa como valor de referencia en la simulación)',
+    valor: '0.15 h⁻¹',
+    fuente: 'García-Ávila, F. et al. (2020), MethodsX 7, 101002',
+    url: 'https://doaj.org/article/d954ced0e7da4eb0875d61b3764608d1',
+  },
+)
+
 export const SIMULADOS = [
   { que: 'Nodos distintos al Centro Histórico (mapa)', regla: 'Escenarios del simulador: muestran cómo se vería la red con más nodos. No son mediciones.' },
   { que: 'Días y horarios de tandeo por colonia', regla: 'Agua de Puebla no publica un calendario abierto; se usan horarios de ejemplo para demostrar la cuenta regresiva.' },
   { que: 'Historial de 24 h', regla: 'Escenario de demostración con dos cortes; ilustra la hipótesis de cambio de pH al restablecerse el servicio.' },
   { que: 'Nivel del tinaco', regla: 'Animación ilustrativa; el prototipo no mide nivel.' },
+  { que: 'Cloro libre en "Mi agua"', regla: 'El nodo no mide cloro. Se estima con decaimiento de primer orden (0.15 h⁻¹, García-Ávila et al. 2020) y el reloj va 60 veces más rápido.' },
+  { que: 'Clorador automático', regla: 'Dispositivo hipotético: agrega cloro cuando baja de 0.5 mg/L (OMS) y lo sube a 1.0 mg/L (dentro de NOM-127).' },
+  { que: 'Cloro en "Tiempo de contacto y CT"', regla: 'Lo captura el operador (kit DPD); el tiempo de contacto sí se mide con el reloj real desde el último ciclo.' },
 ]

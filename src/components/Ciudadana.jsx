@@ -4,6 +4,8 @@ import { COLONIAS } from '../config.js'
 import { desbloquearAudio } from '../lib/sound.js'
 import { INEGI } from './Tecnica.jsx'
 import * as I from './Iconos.jsx'
+import MiAgua from './MiAgua.jsx'
+import Problema from './Problema.jsx'
 
 const Gota3D = lazy(() => import('./Gota3D.jsx'))
 
@@ -140,18 +142,12 @@ const TARJETAS = [
 ]
 
 function Carrusel() {
-  const ref = useRef(null)
-  const mover = (s) => ref.current?.scrollBy({ left: s * ref.current.clientWidth * 0.8, behavior: 'smooth' })
   return (
     <section className="panel carrusel" aria-labelledby="h-aprende">
       <header className="panel-cab">
         <h2 id="h-aprende">Cuida tu agua</h2>
-        <div className="carrusel-nav">
-          <button onClick={() => mover(-1)} aria-label="Anterior"><I.FlechaIzq /></button>
-          <button onClick={() => mover(1)} aria-label="Siguiente"><I.Flecha /></button>
-        </div>
       </header>
-      <ul ref={ref} className="carrusel-pista">
+      <ul className="carrusel-pista tarjetas-grid">
         {TARJETAS.map((c, i) => (
           <li key={c.t} className={`tarjeta-edu e${i}`}>
             <div className="tarjeta-ic">{c.ic}</div>
@@ -203,6 +199,8 @@ export default function Ciudadana({ a, clima }) {
         </div>
       </section>
       <div className="rejilla ciu">
+        <Problema temp={clima.suelo.s54} />
+        <MiAgua t={t} temp={clima.suelo.s54} />
         <Tandeo a={a} colonia={colonia} setColonia={setColonia} />
         <TinacoGemelo t={t} nivel={nivel} />
         <Carrusel />
