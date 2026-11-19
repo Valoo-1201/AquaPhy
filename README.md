@@ -41,6 +41,8 @@ El token queda visible en el navegador; úsalo solo para la demo.
 | V8 | Ácido | Double | 0–200 mL | mL dosificados |
 | V9 | Voltaje | Double | 0–15 V | Simulado (panel solar) |
 | V10 | Pulso | Integer | 0–2000 ms | Último pulso |
+| V11 | pH crudo | Double | 0–14, 3 decimales | Sin filtrar, para ver el ruido |
+| V12 | ADC | Integer | 0–1023 | Cuentas del ADC de 10 bits |
 
 Eventos opcionales (Templates → Events): `dosis_inicio`, `dosis_bloqueada`, `paro_emergencia`, `temperatura_alta`.
 
@@ -49,9 +51,9 @@ Eventos opcionales (Templates → Events): `dosis_inicio`, `dosis_bloqueada`, `p
 `firmware/AquaPhy_ESP32/AquaPhy_ESP32.ino`, basado en el código original del equipo:
 
 1. Pon `BLYNK_TEMPLATE_ID`, `BLYNK_AUTH_TOKEN`, WiFi y el pin del relé.
-2. Con `MODO_SIMULACION = true` funciona sin sonda. Para la sonda real ponlo en `false`,
-   mide el voltaje con los buffers de pH 7 y 4 (comando `C` en el Monitor serie) y ajusta `CAL_V_PH7` y `CAL_V_PH4`.
-3. El control aplica el 80 % del pulso calculado, espera 3 s, mide cuánto bajó el pH y corrige su
+2. Con `MODO_SIMULACION = true` funciona sin sonda. Para la sonda real ponlo en `false`. La calibración ya trae
+   la tabla del reto (pH 7 = 1.648 V, pH 4 = 2.175 V, es decir pH = (892 − ADC) / 54.4). Si tu sonda difiere, mide con el comando `C`.
+3. El control empieza con pulsos cortos, aplica el 75 % del pulso calculado, espera 3 s, mide cuánto bajó el pH y corrige su
    estimación antes del siguiente pulso. Así se acerca al umbral sin pasarse.
 4. **XN44:** los puntos donde va el comando del módulo de audio están marcados en `alertaInicio()` y `alertaFin()`.
 

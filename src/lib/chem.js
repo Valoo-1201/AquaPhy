@@ -11,19 +11,38 @@ export function fraccionHOCl(ph, tempC = 20) {
   return 1 / (1 + 10 ** (ph - pKa(tempC)))
 }
 
-// Mismos colores que el firmware (COLORES[] en el .ino), índice = pH redondeado.
+// Escala del indicador universal según la tabla del reto (MICROSIDE).
+// Mismos colores que COLORES[] en el firmware. Índice = pH redondeado.
 export const INDICADOR = [
-  ['Rojo', '#ff0000'], ['Rojo anaranjado', '#ff4500'], ['Naranja', '#ff8000'],
-  ['Amarillo naranja', '#ffbe00'], ['Amarillo', '#ffe600'], ['Verde amarillento', '#96dc00'],
-  ['Verde', '#00be00'], ['Verde', '#00be00'], ['Verde', '#00be00'],
-  ['Verde azulado', '#00b98c'], ['Azul verdoso', '#009bbe'], ['Azul', '#005aeb'],
-  ['Azul violáceo', '#433cd2'], ['Púrpura', '#7d2dbe'], ['Violeta', '#a02de1'],
+  ['Rojo', '#d7191c'], ['Rojo', '#e8281f'], ['Rojo', '#f03c25'],
+  ['Rojo naranja', '#f46a1f'], ['Naranja', '#f7941d'], ['Amarillo naranja', '#fbb117'],
+  ['Amarillo', '#ffe01b'], ['Verde', '#3db54a'], ['Verde azulado', '#1ba39c'],
+  ['Azul', '#1e88e5'], ['Azul oscuro', '#1a4fa0'], ['Índigo', '#3f2d9c'],
+  ['Violeta', '#6a2c91'], ['Violeta', '#7b2a8c'], ['Violeta oscuro', '#4b1a5e'],
 ]
+
+export function clasificacion(ph) {
+  const i = Math.max(0, Math.min(14, Math.round(ph)))
+  if (i <= 2) return 'Ácido fuerte'
+  if (i <= 4) return 'Ácido'
+  if (i <= 6) return 'Ácido débil'
+  if (i === 7) return 'Neutro'
+  if (i <= 9) return 'Alcalino débil'
+  if (i <= 11) return 'Alcalino'
+  return 'Alcalino fuerte'
+}
 
 export function colorPH(ph) {
   const i = Math.max(0, Math.min(14, Math.round(ph)))
-  return { nombre: INDICADOR[i][0], hex: INDICADOR[i][1] }
+  return { i, nombre: INDICADOR[i][0], hex: INDICADOR[i][1] }
 }
+
+// Sonda del reto: lineal y decreciente. pH 0 → ADC 892 (2.877 V); pH 14 → ADC 130 (0.419 V).
+// ADC de 10 bits con referencia de 3.3 V.
+export const ADC_PH0 = 892
+export const CUENTAS_POR_PH = (892 - 130) / 14 // ≈ 54.4
+export const phAADC = (ph) => Math.round(ADC_PH0 - ph * CUENTAS_POR_PH)
+export const adcAVolt = (adc) => (adc * 3.3) / 1023
 
 export const GRADIENTE_INDICADOR = `linear-gradient(90deg, ${INDICADOR.map(([, c], i) => `${c} ${(i / 14) * 100}%`).join(', ')})`
 

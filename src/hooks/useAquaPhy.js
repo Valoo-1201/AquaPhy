@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { PINS, ESTADOS, TEMP_LIMITE, NOM_MIN, NOM_MAX, leerConfigBlynk, guardarConfigBlynk } from '../config.js'
+import { PINS, ESTADOS, TEMP_LIMITE, NOM_MIN, NOM_MAX, leerConfigBlynk, guardarConfigBlynk, adcDesdePH } from '../config.js'
 import { blynkGet, blynkSet, blynkOnline } from '../lib/blynk.js'
 import { Simulador } from '../lib/sim.js'
 import { sonidoInicio, sonidoFin, sonidoGota, sonidoAlerta } from '../lib/sound.js'
@@ -26,7 +26,7 @@ function historial24h() {
   return { puntos, cortes }
 }
 
-const INICIAL = { ph: 7.3, umbral: 6.8, estado: 0, bomba: 0, paro: 0, tempPlaca: 38, acido: 0, pulso: 0, voltaje: 12.3 }
+const INICIAL = { phCrudo: 7.3, adc: 495, k: 0, ph: 7.3, umbral: 6.8, estado: 0, bomba: 0, paro: 0, tempPlaca: 38, acido: 0, pulso: 0, voltaje: 12.3 }
 
 export function useAquaPhy() {
   const [cfg, setCfg] = useState(leerConfigBlynk)
@@ -34,7 +34,19 @@ export function useAquaPhy() {
   const [t, setT] = useState(INICIAL)
   const [enLinea, setEnLinea] = useState(true)
   const [ultimaLectura, setUltimaLectura] = useState(new Date())
-  const [vivo, setVivo] = useState([])
+  const [vivo, setVivo] = useState(() => {
+    if (leerConfigBlynk().token) return []
+    const ahora = Date.now()
+    return Array.from({ length: 90 }, (_, i) => {
+      const ph = 7.3 + Math.sin(i / 9) * 0.01
+      return { s: ahora - (90 - i) * 1000, ph: +ph.toFixed(3), crudo: +(ph + (Math.random() - 0.5) * 0.12).toFixed(3), umbral: 6.8, bomba: 0 }
+    })
+  })
+  const [ciclos, setCiclos] = useState(() => (leerConfigBlynk().token ? [] : [
+    { id: 1, hora: '09:15 a.m.', phInicio: 7.45, umbral: 6.5, phFinal: 6.51, error: 0.01, pulsos: 4, ml: 52.1, dur: 14.8, resultado: 'Umbral alcanzado', demo: true },
+    { id: 2, hora: '11:42 a.m.', phInicio: 7.31, umbral: 6.8, phFinal: 6.82, error: 0.02, pulsos: 3, ml: 38.5, dur: 11.2, resultado: 'Umbral alcanzado', demo: true },
+  ]))
+  const ciclo = useRef(null)
   const [eventos, setEventos] = useState(() => [
     { id: 1, hora: '08:20 a.m.', texto: 'Mantenimiento de sonda completado', nodo: 'Centro Histórico', tipo: 'info' },
     { id: 2, hora: '09:58 a.m.', texto: 'Batería al 18 % en nodo Amalucan', nodo: 'Amalucan', tipo: 'aviso' },
@@ -74,14 +86,16 @@ export function useAquaPhy() {
       return () => clearInterval(id)
     }
     let vivoFlag = true
-    const pins = [PINS.ph, PINS.umbral, PINS.estado, PINS.bomba, PINS.paro, PINS.tempPlaca, PINS.acido, PINS.pulso, PINS.voltaje]
+    const pins = [PINS.ph, PINS.phCrudo, PINS.adc, PINS.umbral, PINS.estado, PINS.bomba, PINS.paro, PINS.tempPlaca, PINS.acido, PINS.pulso, PINS.voltaje]
     const leer = async () => {
       try {
         const d = await blynkGet(cfg, pins)
         if (!vivoFlag) return
         const n = (k, def = 0) => (d[k] === undefined || d[k] === '' ? def : Number(d[k]))
+        const ph = n(PINS.ph, 7)
         setT({
-          ph: n(PINS.ph, 7), umbral: n(PINS.umbral, 6.8), estado: n(PINS.estado), bomba: n(PINS.bomba),
+          phCrudo: n(PINS.phCrudo, ph), adc: n(PINS.adc, adcDesdePH(ph)), k: 0,
+          ph, umbral: n(PINS.umbral, 6.8), estado: n(PINS.estado), bomba: n(PINS.bomba),
           paro: n(PINS.paro), tempPlaca: n(PINS.tempPlaca, 35), acido: n(PINS.acido), pulso: n(PINS.pulso), voltaje: n(PINS.voltaje, 12),
         })
         setUltimaLectura(new Date())
@@ -99,12 +113,14 @@ export function useAquaPhy() {
     return () => { vivoFlag = false; clearInterval(a); clearInterval(b) }
   }, [modo, cfg])
 
-  useEffect(() => { tRef.current = t }, [t])
+  const bombaVista = useRef(0)
+  useEffect(() => { tRef.current = t; if (t.bomba) bombaVista.current = 1 }, [t])
 
   // Serie viva: un punto por segundo.
   useEffect(() => {
     const id = setInterval(() => {
-      setVivo((v) => [...v, { s: Date.now(), ph: +tRef.current.ph.toFixed(3), umbral: tRef.current.umbral }].slice(-90))
+      setVivo((v) => [...v, { s: Date.now(), ph: +tRef.current.ph.toFixed(3), crudo: +tRef.current.phCrudo.toFixed(3), umbral: tRef.current.umbral, bomba: bombaVista.current || tRef.current.bomba }].slice(-90))
+      bombaVista.current = 0
     }, 1000)
     return () => clearInterval(id)
   }, [])
@@ -121,6 +137,19 @@ export function useAquaPhy() {
   useEffect(() => {
     const p = previo.current
     const activo = (e) => e === 1 || e === 2
+    if (!activo(p.estado) && t.estado === 1) {
+      ciclo.current = { inicio: Date.now(), phInicio: p.ph, umbral: t.umbral, pulsos: 1, mlInicio: p.acido }
+    }
+    if (p.estado === 2 && t.estado === 1 && ciclo.current) ciclo.current.pulsos += 1
+    if (activo(p.estado) && !activo(t.estado) && ciclo.current) {
+      const c = ciclo.current
+      ciclo.current = null
+      setCiclos((l) => [...l, {
+        id: Date.now(), hora: hora(), phInicio: c.phInicio, umbral: c.umbral, phFinal: t.ph, error: t.ph - c.umbral,
+        pulsos: c.pulsos, ml: Math.max(0, t.acido - c.mlInicio), dur: (Date.now() - c.inicio) / 1000,
+        resultado: t.estado === 3 ? 'Umbral alcanzado' : t.estado === 4 ? 'Paro de emergencia' : 'Detenido',
+      }].slice(-12))
+    }
     if (!activo(p.estado) && t.estado === 1) {
       sonidoInicio()
       avisar(`Dosificando ácido · pulso de ${t.pulso} ms`, 'dosis')
@@ -206,7 +235,7 @@ export function useAquaPhy() {
   }, [registrar])
 
   return {
-    t, modo, cfg, enLinea, error, ultimaLectura, vivo, historia, eventos, avisos, modal, setModal,
+    t, modo, cfg, enLinea, ciclos, cicloActual: ciclo.current, error, ultimaLectura, vivo, historia, eventos, avisos, modal, setModal,
     reportes, midiendo: Date.now() < midiendoHasta, estadoTexto: ESTADOS[t.estado] ?? '—',
     dosificar, detener, fijarUmbral, confirmarUmbral, paro, reportarAgua, simularCalor, conectarBlynk,
   }

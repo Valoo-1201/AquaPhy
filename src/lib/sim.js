@@ -7,7 +7,7 @@ const ESTABILIZACION_MS = 2500
 const PULSO_MIN_MS = 50 // el relé conmuta en ~50 ms
 const PULSO_MAX_MS = 800
 const BANDA = 0.03 // tolerancia sobre el umbral para dar por terminado
-const SEGURIDAD = 0.8 // dosifica solo el 80 % de lo calculado para no pasarse
+const SEGURIDAD = 0.75 // dosifica solo el 75 % de lo calculado para no pasarse
 
 export class Simulador {
   constructor() {
@@ -21,10 +21,12 @@ export class Simulador {
     this.pulso = 0
     this.voltaje = 12.4
     this.kReal = 0.0004 // pH por ms de bomba (proceso "real")
-    this.kEst = 0.0003 // estimación que el control va corrigiendo
+    this.kEst = 0.0006 // estimación inicial alta a propósito: el primer pulso sale corto que el control va corrigiendo
     this.inicio = 0
     this.phAntes = this.ph
     this.calor = false
+    this.filtrado = this.ph
+    this.crudo = this.ph
     this.ultimo = performance.now()
   }
 
@@ -32,16 +34,17 @@ export class Simulador {
     if (this.paro) return { ok: false, motivo: 'paro' }
     if (this.tempPlaca > 55) return { ok: false, motivo: 'calor' }
     if (this.estado === 1 || this.estado === 2) return { ok: false, motivo: 'activo' }
-    if (this.ph <= umbral + BANDA) return { ok: false, motivo: 'umbral' }
+    if (this.filtrado <= umbral + BANDA) return { ok: false, motivo: 'umbral' }
     this.umbral = umbral
     this.#abrir(performance.now())
     return { ok: true }
   }
 
   #abrir(ahora) {
-    const calculado = ((this.ph - this.umbral) / this.kEst) * SEGURIDAD
+    const calculado = ((this.filtrado - this.umbral) / this.kEst) * SEGURIDAD
     this.pulso = Math.round(Math.min(PULSO_MAX_MS, Math.max(PULSO_MIN_MS, calculado)))
-    this.phAntes = this.ph
+    this.phAntes = this.filtrado
+    this.aplicado = 0
     this.inicio = ahora
     this.estado = 1
     this.bomba = 1
@@ -61,6 +64,8 @@ export class Simulador {
   llegaAgua() {
     if (this.estado === 1 || this.estado === 2) return
     this.ph = 7.75 + Math.random() * 0.25
+    this.filtrado = this.ph
+    this.ventana = []
     this.estado = 0
   }
 
@@ -70,11 +75,25 @@ export class Simulador {
     this.ultimo = ahora
     const t = ahora - this.inicio
 
+    // Sonda: lectura cruda con ruido eléctrico. Filtro igual al firmware:
+    // media recortada de las últimas 15 muestras + promedio exponencial.
+    const g = Math.sqrt(-2 * Math.log(Math.random() || 1e-9)) * Math.cos(2 * Math.PI * Math.random())
+    this.crudo = this.ph + g * 0.035 + (Math.random() < 0.03 ? (Math.random() - 0.5) * 0.4 : 0)
+    this.ventana = [...(this.ventana || []), this.crudo].slice(-15)
+    const orden = [...this.ventana].sort((x, y) => x - y)
+    const r = Math.floor(orden.length / 5)
+    const nucleo = orden.slice(r, orden.length - r)
+    const media = nucleo.reduce((acc, x) => acc + x, 0) / nucleo.length
+    this.filtrado = 0.6 * this.filtrado + 0.4 * media
+
+    // Las decisiones usan la lectura FILTRADA, igual que el firmware.
     if (this.estado === 1) {
-      const variacion = 0.9 + Math.random() * 0.2
-      this.ph = Math.max(4.0, this.ph - this.kReal * variacion * dt)
-      this.acido += CAUDAL_ML_POR_MS * dt
-      if (this.ph <= this.umbral) {
+      const abierta = Math.max(0, Math.min(t, this.pulso) - this.aplicado) // ms reales de bomba en este paso
+      this.aplicado += abierta
+      const variacion = 0.95 + Math.random() * 0.1
+      this.ph = Math.max(4.0, this.ph - this.kReal * variacion * abierta)
+      this.acido += CAUDAL_ML_POR_MS * abierta
+      if (this.filtrado <= this.umbral) {
         this.estado = 3
         this.bomba = 0
       } else if (t >= this.pulso) {
@@ -83,9 +102,9 @@ export class Simulador {
         this.inicio = ahora
       }
     } else if (this.estado === 2 && t >= ESTABILIZACION_MS) {
-      const medido = (this.phAntes - this.ph) / this.pulso
-      if (medido > 0) this.kEst = Math.min(0.002, Math.max(0.00005, 0.5 * this.kEst + 0.5 * medido))
-      if (this.ph - this.umbral <= BANDA) this.estado = 3
+      const medido = (this.phAntes - this.filtrado) / Math.max(1, this.aplicado)
+      if (medido > 0) this.kEst = Math.min(0.002, Math.max(0.00005, 0.3 * this.kEst + 0.7 * medido))
+      if (this.filtrado - this.umbral <= BANDA) this.estado = 3
       else this.#abrir(ahora)
     }
 
@@ -101,7 +120,10 @@ export class Simulador {
 
   lectura() {
     return {
-      ph: this.ph + (Math.random() - 0.5) * 0.012,
+      ph: this.filtrado,
+      phCrudo: this.crudo,
+      adc: Math.max(0, Math.min(1023, Math.round(892 - 54.4 * this.crudo))),
+      k: this.kEst,
       umbral: this.umbral,
       estado: this.estado,
       bomba: this.bomba,

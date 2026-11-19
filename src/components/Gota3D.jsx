@@ -105,24 +105,6 @@ function Chapetes({ animo }) {
   ))
 }
 
-function Lentes() {
-  const y = 0.14
-  return (
-    <group>
-      {[-1, 1].map((s) => (
-        <mesh key={s} position={enSuperficie(0.24 * s, y, -0.04)} rotation={[-0.2, 0.3 * s, 0]}>
-          <boxGeometry args={[0.26, 0.15, 0.05]} />
-          <meshPhysicalMaterial color="#0d1b3d" roughness={0.05} clearcoat={1} />
-        </mesh>
-      ))}
-      <mesh position={[0, y + 0.02, radioEnY(y) + 0.03]}>
-        <boxGeometry args={[0.14, 0.03, 0.03]} />
-        <meshStandardMaterial color="#0d1b3d" />
-      </mesh>
-    </group>
-  )
-}
-
 function Casco() {
   return (
     <group position={[0, 0.42, 0]} rotation={[-0.08, 0, 0.08]}>
@@ -293,7 +275,6 @@ function Gota({ animo, reducido }) {
         <Cejas animo={animo} />
         <Boca animo={animo} />
         <Chapetes animo={animo} />
-        {animo === 'feliz' && <Lentes />}
         {animo === 'mezclando' && <Casco />}
         {animo === 'calor' && <Sudor />}
       </group>

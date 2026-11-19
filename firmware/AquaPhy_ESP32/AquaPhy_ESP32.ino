@@ -41,9 +41,11 @@ constexpr int PIN_PIEZO = -1;  // GPIO de un piezo pasivo; -1 = solo Monitor ser
 constexpr int LED_RX = 9, LED_TX = 10; // Serial2 hacia el XN03A
 
 // ---------- Calibración de la sonda (pendiente negativa) ----------
-// Mide el voltaje con buffer pH 7 y pH 4 usando el comando C del Monitor serie.
-constexpr float CAL_V_PH7 = 1.500f;  // V con buffer pH 7
-constexpr float CAL_V_PH4 = 2.030f;  // V con buffer pH 4 (mayor: pendiente negativa)
+// Valores de la tabla del reto (ADC 10 bits, Vref 3.3 V): pH 7 → 1.648 V (511),
+// pH 4 → 2.175 V (674). Equivale a pH = (892 − ADC) / 54.4.
+// Si tu sonda difiere, mide con el comando C del Monitor serie y ajusta.
+constexpr float CAL_V_PH7 = 1.648f;  // V con buffer pH 7
+constexpr float CAL_V_PH4 = 2.175f;  // V con buffer pH 4 (mayor: pendiente negativa)
 constexpr float PENDIENTE = (7.0f - 4.0f) / (CAL_V_PH7 - CAL_V_PH4); // pH por volt (< 0)
 
 // ---------- Dosificación ----------
@@ -51,14 +53,15 @@ constexpr float PH_INICIAL_SIM   = 7.30f;
 constexpr float PH_SOLUCION      = 4.00f;
 constexpr float UMBRAL_MIN = 4.50f, UMBRAL_MAX = 7.00f;
 constexpr float BANDA            = 0.03f;   // tolerancia para dar por alcanzado el umbral
-constexpr float SEGURIDAD        = 0.80f;   // aplica solo el 80 % del pulso calculado
+constexpr float SEGURIDAD        = 0.75f;   // aplica solo el 75 % del pulso calculado
 constexpr uint32_t PULSO_MIN_MS  = 50;      // el relé conmuta en ~50 ms
 constexpr uint32_t PULSO_MAX_MS  = 800;     // 800 ms ≈ 26 mL con la bomba de 33 mL/s
 constexpr uint32_t ESTABILIZACION_MS = 3000;
 constexpr float CAUDAL_ML_POR_MS = 0.033f;
 constexpr float TEMP_LIMITE      = 55.0f;
-// Estimación inicial de cuánto baja el pH por ms de bomba. Se corrige sola.
-float kEstimado = 0.00012f;
+// Estimación inicial de cuánto baja el pH por ms de bomba. Empieza ALTA a propósito
+// para que el primer pulso sea corto; después se corrige con cada medición.
+float kEstimado = 0.00030f;
 constexpr float K_REAL_SIM = 0.00015f;      // solo en simulación
 
 // ---------- Pines virtuales (deben coincidir con src/config.js) ----------
@@ -73,6 +76,8 @@ constexpr float K_REAL_SIM = 0.00015f;      // solo en simulación
 #define VP_ACIDO    V8
 #define VP_VOLTAJE  V9
 #define VP_PULSO    V10
+#define VP_CRUDO    V11  // pH sin filtrar (para ver el ruido en el tablero)
+#define VP_ADC      V12  // cuentas del ADC de 10 bits
 
 enum Estado { REPOSO, DOSIFICANDO, ESTABILIZANDO, FINALIZADO, PARO };
 Estado estado = REPOSO;
@@ -108,6 +113,9 @@ float muestras[N_MUESTRAS];
 int idxMuestra = 0;
 bool bufferLleno = false;
 
+float ultimoCrudo = PH_INICIAL_SIM;
+int ultimoADC = 0;
+
 float leerVoltaje() {
   return analogReadMilliVolts(PIN_PH) / 1000.0f;   // usa la calibración de fábrica del ADC
 }
@@ -123,6 +131,8 @@ void tomarMuestra() {
   } else {
     ph = voltajeAPH(leerVoltaje());
   }
+  ultimoCrudo = ph;
+  ultimoADC = MODO_SIMULACION ? (int)lroundf(892.0f - 54.4f * ph) : analogRead(PIN_PH);
   muestras[idxMuestra] = ph;
   idxMuestra = (idxMuestra + 1) % N_MUESTRAS;
   if (idxMuestra == 0) bufferLleno = true;
@@ -298,6 +308,8 @@ void enviarTelemetria() {
   snprintf(hex, sizeof(hex), "#%02X%02X%02X", c.r, c.g, c.b);
 
   Blynk.virtualWrite(VP_PH, phFiltrado);
+  Blynk.virtualWrite(VP_CRUDO, ultimoCrudo);
+  Blynk.virtualWrite(VP_ADC, ultimoADC);
   Blynk.virtualWrite(VP_TEMP, tempPlaca);
   Blynk.virtualWrite(VP_COLOR, hex);
   Blynk.virtualWrite(VP_ACIDO, acidoML);

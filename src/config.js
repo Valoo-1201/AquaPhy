@@ -16,6 +16,8 @@ export const PINS = {
   acido: 'V8',     // double mL     (ácido dosificado hoy)
   voltaje: 'V9',   // double V      (alimentación / panel solar)
   pulso: 'V10',    // int ms        (último pulso aplicado)
+  phCrudo: 'V11',  // double        (lectura sin filtrar, para ver el ruido)
+  adc: 'V12',      // int 0–1023    (cuentas del ADC de 10 bits)
 }
 
 export const ESTADOS = ['Reposo', 'Dosificando', 'Estabilizando', 'Umbral alcanzado', 'Paro de emergencia']
@@ -59,3 +61,9 @@ export const COLONIAS = [
   { id: 'amalucan', nombre: 'Amalucan', lat: 19.0655, lng: -98.1525, dias: [2, 5], hora: 6, horas: 5 },
   { id: 'campeche', nombre: 'San Baltazar Campeche', lat: 19.0185, lng: -98.2095, dias: [0, 2, 4], hora: 5, horas: 7 },
 ]
+
+// Conversión oficial del reto (ADC 10 bits, Vref 3.3 V, pendiente negativa):
+// pH 7 → 1.648 V → 511 cuentas ; pH 4 → 2.175 V → 674 cuentas
+export const adcDesdePH = (ph) => Math.max(0, Math.min(1023, Math.round(892 - 54.4 * ph)))
+export const voltDesdeADC = (adc) => (adc * 3.3) / 1023
+export const phDesdeADC = (adc) => (892 - adc) / 54.4
