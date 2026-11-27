@@ -572,11 +572,11 @@ AquaPhy/
 
 ## Equipo Lagoonas
 
-| Integrante | GitHub | Rol |
-| --- | --- | --- |
-| Myrahis Yurizahan Sanluis Cerezo | [@MyrahisYSanluis](https://github.com/MyrahisYSanluis) | Página web e investigación del problema |
-| María Valentina García Hernandez | [@Valoo-1201](https://github.com/Valoo-1201) | Página web |
-| Yaretzi Abigail López Hernández | [@yarealh7-maker](https://github.com/yarealh7-maker) | Hardware y funcionamiento con Blynk |
-| Lourdes María García Garfias | [@Luluugr](https://github.com/Luluugr?tab=repositories) | Hardware y funcionamiento con Blynk |
+| Integrante | Rol |
+| --- | --- |
+| [Myrahis Yurizahan Sanluis Cerezo](https://github.com/MyrahisYSanluis) | Página web e investigación del problema |
+| [María Valentina García Hernandez](https://github.com/Valoo-1201) | Página web |
+| [Yaretzi Abigail López Hernández](https://github.com/yarealh7-maker) | Hardware y funcionamiento con Blynk |
+| [Lourdes María García Garfias](https://github.com/Luluugr?tab=repositories) | Hardware y funcionamiento con Blynk |
 
 Proyecto desarrollado para el Hackatón MICROSIDE, reto de monitoreo y control de calidad del agua IoT.
