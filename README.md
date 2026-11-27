@@ -218,6 +218,6 @@ AquaPhy/
 - Myrahis Sanluis
 - María Valentina García
 - Lourdes García
-- Yarethzi López
+- Yaretzi López
 
 Proyecto desarrollado para el Hackatón MICROSIDE, reto de monitoreo y control de calidad del agua IoT.
