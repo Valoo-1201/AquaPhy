@@ -220,6 +220,6 @@ AquaPhy/
 - Myrahis Sanluis
 - María Valentina García
 - Lourdes García
-- Yarethzi López
+- Yaretzi López
 
 Built for the MICROSIDE Hackathon, IoT water quality monitoring and control challenge.
